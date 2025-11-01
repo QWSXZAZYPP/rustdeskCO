@@ -1,4 +1,4 @@
-name: Build the flutter version of the RustDesk
+name: Build CLI222
 on:
   workflow_call:
     inputs:
