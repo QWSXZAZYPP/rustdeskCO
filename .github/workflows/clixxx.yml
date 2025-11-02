@@ -1,5 +1,5 @@
 #  kkkkkkkk
-name: Build CLIALL
+name: Build CLIALL  XXX
 on:
   workflow_call:
     inputs:
@@ -121,7 +121,7 @@ jobs:
 
       - name: Build CLI rustdesk (no flutter)
         run: |
-          python3 build.py --cli --hwcodec --vram
+          python3 buildx.py --cli --hwcodec --vram
 
       - name: Rename CLI binary
         run: |
