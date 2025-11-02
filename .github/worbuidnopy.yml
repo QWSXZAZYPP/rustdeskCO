@@ -1,0 +1,97 @@
+# .github/workflows/build.yml
+name: Build NOPYTHON CLI (exec)
+
+on:
+  push:
+    tags:
+      - 'cli-*'  # 触发标签：git tag cli-v1 && git push origin cli-v1
+
+jobs:
+  build-cli-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Add clap dependency
+        run: |
+          sed -i '/\[dependencies\]/a clap = { version = "4.5", features = ["derive"] }' Cargo.toml
+
+      - name: Inject CLI code into main.rs
+        run: |
+          $code = @'
+mod cli;
+#[cfg(feature = "cli")]
+fn main() { cli::handle_cli(); }
+#[cfg(not(feature = "cli"))]
+fn main() { crate::core_main::start_app(); }
+'@
+          Set-Content -Path src/main.rs -Value $code -Encoding UTF8
+
+      - name: Create src/cli.rs
+        shell: pwsh
+        run: |
+          $cli = @'
+use clap::{Parser, Subcommand};
+use std::process::{Command, Stdio};
+
+#[derive(Parser)] #[command(name = "rustdesk")]
+pub struct Cli { #[command(subcommand)] pub command: Commands }
+
+#[derive(Subcommand)]
+pub enum Commands {
+    Id,
+    Exec { #[arg(short,long)] id: String, #[arg(short,long)] password: String, #[arg(short,long)] command: String },
+}
+
+pub fn handle_cli() {
+    let cli = Cli::parse();
+    match cli.command {
+        Commands::Id => println!("{}", hbb_common::config::Config::get_id()),
+        Commands::Exec { id, password, command } => {
+            if let Ok(_) = crate::client::start_one_port_forward(&id, &password, 0, "", "") {
+                let (sh, f) = if cfg!(windows) { ("cmd", "/C") } else { ("sh", "-c") };
+                let out = Command::new(sh).arg(f).arg(&command)
+                    .stdout(Stdio::piped()).stderr(Stdio::piped())
+                    .spawn().unwrap().wait_with_output().unwrap();
+                println!("STDOUT:\n{}\nSTDERR:\n{}\nExit: {}", 
+                    String::from_utf8_lossy(&out.stdout),
+                    String::from_utf8_lossy(&out.stderr),
+                    out.status.code().unwrap_or(1));
+            } else { eprintln!("Connect failed"); }
+        }
+    }
+}
+'@
+          Set-Content -Path src/cli.rs -Value $cli -Encoding UTF8
+
+      - name: Build CLI only
+        run: |
+          cargo build --release --features cli
+
+      - name: Rename output
+        run: |
+          mv target/release/rustdesk.exe rustdesk-cli-${{ github.ref_name }}.exe
+
+      - name: Upload CLI exe
+        uses: actions/upload-artifact@v3
+        with:
+          name: rustdesk-cli
+          path: rustdesk-cli-*.exe
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: rustdesk-cli-*.exe
+          prerelease: false
