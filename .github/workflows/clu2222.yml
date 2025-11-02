@@ -138,7 +138,7 @@ jobs:
       - name: Build RustDesk CLI (Console + Static CRT)
         shell: bash
         run: |
-          python3 ..\..\buildx.py \
+          python3 .\buildx.py \
             --cli \
             --static-crt \
             --portable \
