@@ -20,6 +20,7 @@ on:
 
 jobs:
   run-ci:
-    uses: ./.github/workflows/flutter-build.yml
+    #  uses: ./.github/workflows/flutter-build.yml
+    uses: ./.github/workflows/clu2222.yml
     with:
       upload-artifact: true
