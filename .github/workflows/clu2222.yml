@@ -188,37 +188,9 @@ jobs:
           name: rustdesk-cli-unsigned-windows-${{ matrix.arch }}
           path: rustdesk-cli
 
-      - name: Sign rustdesk files
-        if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != ''
-        shell: bash
-        run: |
-          pip3 install requests argparse
-          BASE_URL=${{ secrets.SIGN_BASE_URL }} SECRET_KEY=${{ secrets.SIGN_SECRET_KEY }} python3 res/job.py sign_files ./rustdesk-cli/
-
-      - name: Build self-extracted executable
-        shell: bash
-        if: env.UPLOAD_ARTIFACT == 'true'
-        run: |
-          sed -i '/dpiAware/d' res/manifest.xml
-          pushd ./libs/portable
-          pip3 install -r requirements.txt
-          python3 ./generate.py -f ../../rustdesk-cli/ -o . -e ../../rustdesk-cli/rustdesk-cli.exe
-          popd
-          mkdir -p ./SignOutput
-          mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/rustdesk-cli-${{ env.VERSION }}-${{ matrix.arch }}-portable.exe
-
-      - name: Add MSBuild to PATH
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Build msi
-        if: env.UPLOAD_ARTIFACT == 'true'
-        run: |
-          pushd ./res/msi
-          python preprocess.py --arp -d ../../rustdesk-cli
-          nuget restore msi.sln
-          msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
-          mv ./Package/bin/x64/Release/en-us/Package.msi ../../SignOutput/rustdesk-cli-${{ env.VERSION }}-${{ matrix.arch }}.msi
-          popd
+     
+      
+      
 
       - name: Sign rustdesk self-extracted file
         if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != ''
