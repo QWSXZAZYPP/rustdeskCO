@@ -335,18 +335,18 @@ jobs:
       matrix:
         job:
           -{
-              target: x86_64-apple-darwin,
-              os: macos-13,
-              extra-build-args: "",
-              arch: x86_64,
-              vcpkg-triplet: x64-osx,
+              target:x86_64-apple-darwin,
+              os:macos-13,
+              extra-build-args:"",
+              arch:x86_64,
+              vcpkg-triplet:x64-osx,
             }
           - {
-              target: aarch64-apple-darwin,
-              os: macos-14,
-              extra-build-args: "--screencapturekit",
-              arch: aarch64,
-              vcpkg-triplet: arm64-osx,
+              target:aarch64-apple-darwin,
+              os:macos-14,
+              extra-build-args:"--screencapturekit",
+              arch:aarch64,
+              vcpkg-triplet:arm64-osx,
             }
     steps:
       - name: Export GitHub Actions cache environment variables
@@ -550,26 +550,26 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - {
-              arch: aarch64,
-              target: aarch64-linux-android,
-              os: ubuntu-24.04,
-              reltype: release,
-              suffix: "",
+          -{
+              arch:arch64,
+              target:aarch64-linux-android,
+              os:ubuntu-24.04,
+              reltype:release,
+              suffix:"",
             }
           - {
-              arch: armv7,
-              target: armv7-linux-androideabi,
-              os: ubuntu-24.04,
-              reltype: release,
-              suffix: "",
+              arch:armv7,
+              target:armv7-linux-androideabi,
+              os:ubuntu-24.04,
+              reltype:release,
+              suffix:"",
             }
           - {
-              arch: x86_64,
-              target: x86_64-linux-android,
-              os: ubuntu-24.04,
-              reltype: release,
-              suffix: "",
+              arch:x86_64,
+              target:x86_64-linux-android,
+              os:ubuntu-24.04,
+              reltype:release,
+              suffix:"",
             }
     steps:
       - name: Free Disk Space (Ubuntu)
@@ -976,21 +976,21 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - {
-              arch: x86_64,
-              target: x86_64-unknown-linux-gnu,
-              distro: ubuntu18.04,
-              on: ubuntu-22.04,
-              deb_arch: amd64,
-              vcpkg-triplet: x64-linux,
+          -{
+              arch:x86_64,
+              target:x86_64-unknown-linux-gnu,
+              distro:ubuntu18.04,
+              on:ubuntu-22.04,
+              deb_arch:amd64,
+              vcpkg-triplet:x64-linux,
             }
           - {
-              arch: aarch64,
-              target: aarch64-unknown-linux-gnu,
-              distro: ubuntu18.04,
-              on: ubuntu-22.04-arm,
-              deb_arch: arm64,
-              vcpkg-triplet: arm64-linux,
+              arch:aarch64,
+              target:aarch64-unknown-linux-gnu,
+              distro:ubuntu18.04,
+              on:ubuntu-22.04-arm,
+              deb_arch:arm64,
+              vcpkg-triplet:arm64-linux,
             }
     steps:
       - name: Export GitHub Actions cache environment variables
