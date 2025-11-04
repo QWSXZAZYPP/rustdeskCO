@@ -140,7 +140,7 @@ jobs:
         run: |
           python3 ./buildx.py \
             --cli \
-            --static-crt \
+            #  --static-crt \
             --portable \
             --hwcodec \
             --vram \
