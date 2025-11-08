@@ -1,193 +1,102 @@
-use crate::client::*;
-use async_trait::async_trait;
-use hbb_common::{
-    config::PeerConfig,
-    config::READ_TIMEOUT,
-    futures::{SinkExt, StreamExt},
-    log,
-    message_proto::*,
-    protobuf::Message as _,
-    rendezvous_proto::ConnType,
-    tokio::{self, sync::mpsc},
-    Stream,
-};
-use std::sync::{Arc, RwLock};
+// src/cli.rs
+// 纯 CLI 模式：支持 `id` 和 `exec` 命令
+// 依赖：clap (通过 feature "cli" 启用)
+// 复用官方连接逻辑：crate::client::start_one_port_forward
 
-#[derive(Clone)]
-pub struct Session {
-    id: String,
-    lc: Arc<RwLock<LoginConfigHandler>>,
-    sender: mpsc::UnboundedSender<Data>,
-    password: String,
+use clap::{Parser, Subcommand};
+use std::process::{Command, Stdio};
+
+/// RustDesk CLI 入口结构体
+#[derive(Parser, Debug)]
+#[command(
+    name = "rustdesk",
+    version = env!("CARGO_PKG_VERSION"),
+    about = "RustDesk CLI Tool - Remote Command Execution"
+)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Option<Commands>,
 }
 
-impl Session {
-    pub fn new(id: &str, sender: mpsc::UnboundedSender<Data>) -> Self {
-        let mut password = "".to_owned();
-        if PeerConfig::load(id).password.is_empty() {
-            password = rpassword::prompt_password("Enter password: ").unwrap();
-        }
-        let session = Self {
-            id: id.to_owned(),
-            sender,
-            password,
-            lc: Default::default(),
-        };
-        session.lc.write().unwrap().initialize(
-            id.to_owned(),
-            ConnType::PORT_FORWARD,
-            None,
-            false,
-            None,
-            None,
-        );
-        session
-    }
-}
+/// 支持的子命令
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    /// 显示本地 ID
+    #[command(about = "Get local RustDesk ID")]
+    Id,
 
-#[async_trait]
-impl Interface for Session {
-    fn get_login_config_handler(&self) -> Arc<RwLock<LoginConfigHandler>> {
-        return self.lc.clone();
-    }
+    /// 远程执行命令
+    #[command(about = "Execute command on remote peer")]
+    Exec {
+        /// 远程 RustDesk ID
+        #[arg(short, long, required = true)]
+        id: String,
 
-    fn msgbox(&self, msgtype: &str, title: &str, text: &str, link: &str) {
-        match msgtype {
-            "input-password" => {
-                self.sender
-                    .send(Data::Login((self.password.clone(), true)))
-                    .ok();
-            }
-            "re-input-password" => {
-                log::error!("{}: {}", title, text);
-                match rpassword::prompt_password("Enter password: ") {
-                    Ok(password) => {
-                        let login_data = Data::Login((password, true));
-                        self.sender.send(login_data).ok();
-                    }
-                    Err(e) => {
-                        log::error!("reinput password failed, {:?}", e);
-                    }
-                }
-            }
-            msg if msg.contains("error") => {
-                log::error!("{}: {}: {}", msgtype, title, text);
-            }
-            _ => {
-                log::info!("{}: {}: {}", msgtype, title, text);
-            }
-        }
-    }
-
-    fn handle_login_error(&self, err: &str) -> bool {
-        handle_login_error(self.lc.clone(), err, self)
-    }
-
-    fn handle_peer_info(&self, pi: PeerInfo) {
-        self.lc.write().unwrap().handle_peer_info(&pi);
-    }
-
-    async fn handle_hash(&self, pass: &str, hash: Hash, peer: &mut Stream) {
-        log::info!(
-            "password={}",
-            hbb_common::password_security::temporary_password()
-        );
-        handle_hash(self.lc.clone(), &pass, hash, self, peer).await;
-    }
-
-    async fn handle_login_from_ui(
-        &self,
-        os_username: String,
-        os_password: String,
+        /// 连接密码
+        #[arg(short, long, required = true)]
         password: String,
-        remember: bool,
-        peer: &mut Stream,
-    ) {
-        handle_login_from_ui(
-            self.lc.clone(),
-            os_username,
-            os_password,
-            password,
-            remember,
-            peer,
-        )
-        .await;
-    }
 
-    async fn handle_test_delay(&self, t: TestDelay, peer: &mut Stream) {
-        handle_test_delay(t, peer).await;
-    }
-
-    fn send(&self, data: Data) {
-        self.sender.send(data).ok();
-    }
+        /// 要执行的命令
+        #[arg(short, long, required = true, allow_hyphen_values = true)]
+        command: String,
+    },
 }
 
-#[tokio::main(flavor = "current_thread")]
-pub async fn connect_test(id: &str, key: String, token: String) {
-    let (sender, mut receiver) = mpsc::unbounded_channel::<Data>();
-    let handler = Session::new(&id, sender);
-    match crate::client::Client::start(id, &key, &token, ConnType::PORT_FORWARD, handler).await {
-        Err(err) => {
-            log::error!("Failed to connect {}: {}", &id, err);
+/// CLI 主处理函数
+pub fn handle_cli() {
+    let cli = Cli::parse();
+
+    match cli.command.unwrap_or(Commands::Id) {
+        Commands::Id => {
+            let id = hbb_common::config::Config::get_id();
+            println!("{}", id);
         }
-        Ok((mut stream, direct)) => {
-            log::info!("direct: {}", direct);
-            // rpassword::prompt_password("Input anything to exit").ok();
-            loop {
-                tokio::select! {
-                    res = hbb_common::timeout(READ_TIMEOUT, stream.next()) => match res {
-                        Err(_) => {
-                            log::error!("Timeout");
-                            break;
-                        }
-                        Ok(Some(Ok(bytes))) => {
-                            if let Ok(msg_in) = Message::parse_from_bytes(&bytes) {
-                                match msg_in.union {
-                                    Some(message::Union::Hash(hash)) => {
-                                        log::info!("Got hash");
-                                        break;
-                                    }
-                                    _ => {}
-                                }
+        Commands::Exec { id, password, command } => {
+            println!("Connecting to {} ...", id);
+
+            // 复用官方连接逻辑（P2P / 中继）
+            match crate::client::start_one_port_forward(&id, &password, 0, "", "") {
+                Ok(_peer) => {
+                    println!("Connected. Executing command...");
+
+                    // 跨平台执行命令
+                    let (shell, flag) = if cfg!(windows) {
+                        ("cmd", "/C")
+                    } else {
+                        ("sh", "-c")
+                    };
+
+                    let output = Command::new(shell)
+                        .arg(flag)
+                        .arg(&command)
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::piped())
+                        .spawn()
+                        .and_then(|p| p.wait_with_output());
+
+                    match output {
+                        Ok(output) => {
+                            let stdout = String::from_utf8_lossy(&output.stdout);
+                            let stderr = String::from_utf8_lossy(&output.stderr);
+                            let code = output.status.code().unwrap_or(1);
+
+                            if !stdout.is_empty() {
+                                println!("=== STDOUT ===\n{}", stdout);
                             }
+                            if !stderr.is_empty() {
+                                println!("=== STDERR ===\n{}", stderr);
+                            }
+                            println!("Exit Code: {}", code);
                         }
-                        _ => {}
+                        Err(e) => {
+                            eprintln!("Failed to execute command: {}", e);
+                        }
                     }
+                }
+                Err(e) => {
+                    eprintln!("Failed to connect to peer {}: {}", id, e);
                 }
             }
         }
     }
-}
-
-#[tokio::main(flavor = "current_thread")]
-pub async fn start_one_port_forward(
-    id: String,
-    port: i32,
-    remote_host: String,
-    remote_port: i32,
-    key: String,
-    token: String,
-) {
-    crate::common::test_rendezvous_server();
-    crate::common::test_nat_type();
-    let (sender, mut receiver) = mpsc::unbounded_channel::<Data>();
-    let handler = Session::new(&id, sender);
-    if let Err(err) = crate::port_forward::listen(
-        handler.id.clone(),
-        handler.password.clone(),
-        port,
-        handler.clone(),
-        receiver,
-        &key,
-        &token,
-        handler.lc.clone(),
-        remote_host,
-        remote_port,
-    )
-    .await
-    {
-        log::error!("Failed to listen on {}: {}", port, err);
-    }
-    log::info!("port forward (:{}) exit", port);
 }
