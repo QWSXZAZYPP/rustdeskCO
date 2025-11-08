@@ -1,0 +1,28 @@
+name: Build333CLI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y python3 python3-pip cargo libx11-dev libxext-dev libxcb-shape0-dev libxcb-xfixes0-dev libxcb-randr0-dev
+
+      - name: Build CLI version
+        run: |
+          python3 build.py --cli
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustdesk-cli
+          path: target/release/
