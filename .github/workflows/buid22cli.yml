@@ -1,0 +1,54 @@
+name: Build22CLI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: x86_64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Build CLI binary
+        run: |
+          cargo build --release --features cli
+          echo "✅ Build complete for ${{ matrix.target }}"
+
+      - name: Package binary
+        run: |
+          mkdir -p out
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp target/release/rustdesk.exe out/rustdesk-cli.exe
+            powershell Compress-Archive -Path out/rustdesk-cli.exe -DestinationPath rustdesk-cli-windows.zip
+          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+            cp target/release/rustdesk out/rustdesk-cli
+            zip -j rustdesk-cli-macos.zip out/rustdesk-cli
+          else
+            cp target/release/rustdesk out/rustdesk-cli
+            zip -j rustdesk-cli-linux.zip out/rustdesk-cli
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustdesk-cli-${{ matrix.os }}
+          path: "*.zip"
